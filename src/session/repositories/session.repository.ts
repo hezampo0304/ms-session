@@ -113,6 +113,24 @@ export class SessionRepository {
     });
   }
 
+  async revokeSessionByUser(
+  sessionId: string,
+  userId: string,
+) {
+  return this.prisma.session.updateMany({
+    where: {
+      id: sessionId,
+      userId,
+      status: 'ACTIVE',
+    },
+    data: {
+      status: 'REVOKED',
+      revokedAt: new Date(),
+      revokedReason: 'USER_LOGOUT',
+    },
+  });
+}
+
   async revokeAllByUserId(
     userId: string,
     reason?: string,
@@ -141,4 +159,69 @@ export class SessionRepository {
       },
     });
   }
+
+  async findSessionsByUserId(userId: string) {
+  return this.prisma.session.findMany({
+    where: {
+      userId,
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+}
+
+async revokeAllSessionsExceptCurrent(
+  userId: string,
+  currentSessionId: string,
+) {
+  return this.prisma.session.updateMany({
+    where: {
+      userId,
+      status: 'ACTIVE',
+      id: {
+        not: currentSessionId,
+      },
+    },
+    data: {
+      status: 'REVOKED',
+      revokedAt: new Date(),
+      revokedReason: 'REVOKE_ALL',
+    },
+  });
+}
+
+async expireSession(
+  sessionId: string,
+) {
+  return this.prisma.session.updateMany({
+    where: {
+      id: sessionId,
+      status: 'ACTIVE',
+    },
+    data: {
+      status: 'EXPIRED',
+      revokedAt: new Date(),
+      revokedReason: 'SESSION_EXPIRED',
+    },
+  });
+}
+
+async expireExpiredSessions() {
+  return this.prisma.session.updateMany({
+    where: {
+      status: 'ACTIVE',
+      expiresAt: {
+        lte: new Date(),
+      },
+    },
+    data: {
+      status: 'EXPIRED',
+      revokedAt: new Date(),
+      revokedReason: 'SESSION_EXPIRED',
+    },
+  });
+}
+
+
 }

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 
 import { SessionRepository } from '../repositories/session.repository';
 
@@ -75,6 +75,53 @@ export class SessionService {
     );
   }
 
+  async revokeUserSession(
+  sessionId: string,
+  userId: string,
+  currentSessionId: string,
+) {
+  // No permitimos cerrar la sesión actual
+  if (sessionId === currentSessionId) {
+    throw new BadRequestException(
+      'You cannot revoke the current session. Use logout instead.',
+    );
+  }
+
+  const result =
+    await this.sessionRepository.revokeSessionByUser(
+      sessionId,
+      userId,
+    );
+
+  if (result.count === 0) {
+    throw new NotFoundException(
+      'Session not found or already revoked.',
+    );
+  }
+
+  return {
+    success: true,
+    message: 'Session revoked successfully.',
+  };
+}
+
+async revokeAllOtherSessions(
+  userId: string,
+  currentSessionId: string,
+) {
+  const result =
+    await this.sessionRepository.revokeAllSessionsExceptCurrent(
+      userId,
+      currentSessionId,
+    );
+
+  return {
+    success: true,
+    message: 'All other sessions revoked successfully.',
+    revokedSessions: result.count,
+  };
+}
+
   async revokeAllSessions(
     userId: string,
     reason?: string,
@@ -85,9 +132,27 @@ export class SessionService {
     );
   }
 
-  async getUserSessions(userId: string) {
-    return this.sessionRepository.findActiveByUserId(
+  async getUserSessions(
+  userId: string,
+  currentSessionId: string,
+) {
+  const sessions =
+    await this.sessionRepository.findSessionsByUserId(
       userId,
     );
-  }
+
+  return sessions.map((session) => ({
+    sessionId: session.id,
+    status: session.status,
+    ipAddress: session.ipAddress,
+    userAgent: session.userAgent,
+    createdAt: session.createdAt,
+    lastActivityAt: session.lastActivityAt,
+    expiresAt: session.expiresAt,
+    revokedAt: session.revokedAt,
+    revokedReason: session.revokedReason,
+    isCurrent:
+      session.id === currentSessionId,
+  }));
+}
 }
